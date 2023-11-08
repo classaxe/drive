@@ -110,6 +110,7 @@ hr {
 Basic Setup and User Profile
     [ <a href="#create">Create new Site</a>
     | <a href="#auth">Authentication</a>
+    | <a href="#enforce">Email Validation</a>
 ]</div>
 <div class="container">
 <ol>
@@ -154,7 +155,7 @@ Basic Setup and User Profile
                     </li>
                 </ul>
             </li>
-            <li>Run PHPUnit Testing - TWO tests should pass<br>
+            <li>Run PHPUnit Testing - <b>TWO</b> tests should pass<br>
                 <code class="bash">vendor/bin/phpunit</code>
             </li>
             <li>Commit this first version to git - <b>do this on the host container, not inside vagrant</b> so we have the SSH keys available for github.<br>
@@ -197,7 +198,8 @@ class RegisterTest extends TestCase
         $user = factory(User::class)->create([
             'name' => 'Test',
             'email' => 'test@example.com',
-            'password' => bcrypt('123456')
+            'password' => bcrypt('123456'),
+            'email_verified_at' => null
         ]);
 
         $response = $this->post('login', [
@@ -230,7 +232,7 @@ class RegisterTest extends TestCase
     }
 }</code>
             </li>
-            <li>Run PHPUnit Testing - FOUR tests should pass<br>
+            <li>Run PHPUnit Testing - <b>FOUR</b> tests should pass<br>
                 <code class="bash">vendor/bin/phpunit</code>
             </li>
             <li>Test site on host machine browser:
@@ -253,6 +255,117 @@ class RegisterTest extends TestCase
             </li>
             <li>Commit these changes to git - <b>do this on the host container, not inside vagrant</b><br>
                 <code class="bash">git add .<br>git commit -m "0.0.2 Authentication"<br>git tag 0.0.2<br>git push<br>git push --tags;</code>
+            </li>
+        </ol>
+    </li>
+
+    <hr>
+
+    <li id="enforce">Enforce Email Address validation
+        <ol>
+            <li>Open folder <address>~/sites/homestead/laravel/drive/</address> in Visual Code or similar</li>
+            <li>Edit <address>app/User.php</address></li>
+            <li>If neccessary, uncomment the line which provides 'MustVerifyEmail'<br>
+                <code><div class="deleted">// use Illuminate\Contracts\Auth\MustVerifyEmail;</div><div class="added">use Illuminate\Contracts\Auth\MustVerifyEmail;</div></code>
+            </li>
+            <li>Modify class to implement MustVerifyEmail<br>
+                <code>class User extends Authenticatable <span class="added">implements MustVerifyEmail</span></code>
+            </li>
+            <li>Edit <address>routes/web.php</address> to have the Auth Routes manager include routes for Email Verification:<br>
+                <code>Auth::routes(<span class="added">['verify' =&gt; true]</span>);</code><br>
+                Also, add the <b>Verified Middleware</b> to the home route:<br>
+                <code>Route::get('/home', 'HomeController@index')->name('home')<span class="added">->middleware('verified')</span>;</code><br>
+            </li>
+            <li>Add an additional test to the previously created file <address>tests/Feature/RegisterTest.php</address><br>
+            <code class="php">&lt;?php
+namespace Tests\Feature;
+use Tests\TestCase;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Auth;
+use App\User;
+<span class="added">use Illuminate\Auth\Notifications\VerifyEmail;</span>
+
+
+class RegisterTest extends TestCase
+{
+    /* This destroys and recreates database before testing - caution! */
+    use RefreshDatabase;  // Destroys and recreates DB for testing
+
+    /** @test */
+    function logon()
+    {
+        $user = factory(User::class)->create([
+            'name' => 'Test',
+            'email' => 'test@example.com',
+            'password' => bcrypt('123456'),
+            'email_verified_at' => null
+        ]);
+
+        $response = $this->post('login', [
+            'email' => 'test@example.com',
+            'password' => '123456'
+        ]);
+
+        // Confirm redirect occured
+        $response->assertRedirect('/home');
+
+        // Confirm user is logged in
+        $this->assertTrue(Auth::check());
+    }
+
+    /** @test */
+    function register_and_logon()
+    {
+        $response = $this->post('register', [
+            'name' => 'Test2',
+            'email' => 'test2@example.com',
+            'password' => '123456',
+            'password_confirmation' => '123456'
+        ]);
+
+        // Confirm redirct occurred
+        $response->assertRedirect('/home');
+
+        // Confirm user is logged in
+        $this->assertTrue(Auth::check());
+    }
+
+<div class="added">    /** @test */
+    public function verify_email_validates_user(): void
+    {
+        // VerifyEmail extends Illuminate\Auth\Notifications\VerifyEmail in this example
+        $notification = new VerifyEmail();
+        $user = factory(User::class)->create([ 'email_verified_at' => null ]);
+    
+        // New user should not has verified their email yet
+        $this->assertFalse($user->hasVerifiedEmail());
+    
+        $mail = $notification->toMail($user);
+        $uri = $mail->actionUrl;
+    
+        // Simulate clicking on the validation link
+        $this->actingAs($user)
+            ->get($uri);
+    
+        // User should have verified their email
+        $this->assertTrue(User::find($user->id)->hasVerifiedEmail());
+    }</div>
+}</code>
+            </li>
+            <li>Run PHPUnit Testing - <b>FIVE</b> tests should now pass.<br>
+                <code class="bash">vendor/bin/phpunit</code>
+            </li>
+            <li>Test new policy manually
+                <ul>
+                    <li>Create another user in UI</li>
+                    <li>Check <a href="https://mailtrap.io/" target="_blank">Mailtrap</a> for the message and click the link</li>
+                    <li>Run this query to look for validated email addresses:<br>
+                        <code class="bash">echo "select name, email, email_verified_at from users;"| mysql drive</code>
+                    </li>
+                </ul>
+            </li>
+            <li>Commit these changes to git - <b>do this on the host container, not inside vagrant</b><br>
+                <code class="bash">git add .<br>git commit -m "0.0.3 Email Validation"<br>git tag 0.0.3<br>git push<br>git push --tags;</code>
             </li>
         </ol>
     </li>

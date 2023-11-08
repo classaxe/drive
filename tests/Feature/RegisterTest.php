@@ -4,6 +4,7 @@ use Tests\TestCase;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
 use App\User;
+use Illuminate\Auth\Notifications\VerifyEmail;
 
 class RegisterTest extends TestCase
 {
@@ -14,11 +15,12 @@ class RegisterTest extends TestCase
     function logon()
     {
         $user = factory(User::class)->create([
-            'name' => 'Test',
+            'name' => 'Test created without post',
             'email' => 'test@example.com',
-            'password' => bcrypt('123456')
+            'password' => bcrypt('123456'),
+            'email_verified_at' => null
         ]);
-
+    
         $response = $this->post('login', [
             'email' => 'test@example.com',
             'password' => '123456'
@@ -46,5 +48,26 @@ class RegisterTest extends TestCase
 
         // Confirm user is logged in
         $this->assertTrue(Auth::check());
+    }
+
+    /** @test */
+    public function verify_email_validates_user(): void
+    {
+        // VerifyEmail extends Illuminate\Auth\Notifications\VerifyEmail in this example
+        $notification = new VerifyEmail();
+        $user = factory(User::class)->create([ 'email_verified_at' => null ]);
+    
+        // New user should not has verified their email yet
+        $this->assertFalse($user->hasVerifiedEmail());
+    
+        $mail = $notification->toMail($user);
+        $uri = $mail->actionUrl;
+    
+        // Simulate clicking on the validation link
+        $this->actingAs($user)
+            ->get($uri);
+    
+        // User should have verified their email
+        $this->assertTrue(User::find($user->id)->hasVerifiedEmail());
     }
 }
