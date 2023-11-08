@@ -107,7 +107,10 @@ hr {
 <h1>Laravel Coding Challenge</h1>
 <h2>How this App was created</h2>
 <div class="quicklinks">
-Basic Setup and User Profile [ <a href="#create">Create new Site</a> ]</div>
+Basic Setup and User Profile
+    [ <a href="#create">Create new Site</a>
+    | <a href="#auth">Authentication</a>
+]</div>
 <div class="container">
 <ol>
     <li id="create">Create a new Dev Site in Homestead
@@ -156,6 +159,100 @@ Basic Setup and User Profile [ <a href="#create">Create new Site</a> ]</div>
             </li>
             <li>Commit this first version to git - <b>do this on the host container, not inside vagrant</b> so we have the SSH keys available for github.<br>
                 <code class="bash">git init<br>git add .<br>git commit -m "0.0.1 Create New Site"<br>git branch -M main<br>git tag 0.0.1;<br>git remote add origin git@github.com:classaxe/drive.git<br>git push -u origin main;<br>git push --tags</code>
+            </li>
+        </ol>
+    </li>
+
+    <hr>
+
+    <li id="auth">Implement Authentication framework
+        <ol>
+            <li>Install Laravel Authentication components to provide logon, registration and edit profile:
+                <code class="bash">php artisan make:auth</code>
+            </li>
+            <li>PHP Unit tests are about to start interacting with the database, so we need to create a second database instance for test purposes.<br>
+                <code class="bash">echo "\<br>USE mysql; \<br>DROP SCHEMA IF EXISTS drive_test; \<br>CREATE SCHEMA drive_test; \<br>DROP USER if exists 'drive_test'@'localhost'; \<br>CREATE USER 'drive_test'@'localhost' IDENTIFIED BY 'JfHjWg@#gh^'; \<br>GRANT ALL PRIVILEGES ON drive_test.* TO 'drive_test'@'localhost'; \<br>FLUSH PRIVILEGES" | mysql -uhomestead -psecret</code>
+            </li>
+            <li>Modify the <address>phpunit.xml</address> file to include environment variables to select the new test database during testing.<br>
+                To do this, add these three lines to the &lt;php&gt; block:<br>
+                <code class="php">        &lt;env name="DB_DATABASE" value="drive_test" /&gt;<br>        &lt;env name="DB_USERNAME" value="drive_test" /&gt;<br>        &lt;env name="DB_PASSWORD" value="JfHjWg@#gh^" /&gt;</code>
+            </li>
+            <li>Add a new unit test that checks that a user may successfully register and log in:<br>
+                To do this, create a new file <address>tests/Feature/RegisterTest.php</address> with this content:<br>
+                <code class="php">&lt;?php
+namespace Tests\Feature;
+use Tests\TestCase;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Auth;
+use App\User;
+
+class RegisterTest extends TestCase
+{
+    /* This destroys and recreates database before testing - caution! */
+    use RefreshDatabase;  // Destroys and recreates DB for testing
+
+    /** @test */
+    function logon()
+    {
+        $user = factory(User::class)->create([
+            'name' => 'Test',
+            'email' => 'test@example.com',
+            'password' => bcrypt('123456')
+        ]);
+
+        $response = $this->post('login', [
+            'email' => 'test@example.com',
+            'password' => '123456'
+        ]);
+
+        // Confirm redirect occured
+        $response->assertRedirect('/home');
+
+        // Confirm user is logged in
+        $this->assertTrue(Auth::check());
+    }
+
+    /** @test */
+    function register_and_logon()
+    {
+        $response = $this->post('register', [
+            'name' => 'Test2',
+            'email' => 'test2@example.com',
+            'password' => '123456',
+            'password_confirmation' => '123456'
+        ]);
+
+        // Confirm redirct occurred
+        $response->assertRedirect('/home');
+
+        // Confirm user is logged in
+        $this->assertTrue(Auth::check());
+    }
+}</code>
+            </li>
+            <li>Run PHPUnit Testing - FOUR tests should pass<br>
+                <code class="bash">vendor/bin/phpunit</code>
+            </li>
+            <li>Test site on host machine browser:
+                <ol>
+                    <li>Visit <a href="http://drive.classaxe.local" target="_blank">http://drive.classaxe.local</a></li>
+                    <li>Register an account</li>
+                    <li>Edit the profile</li>
+                    <li>Delete the account</li>
+                    <li>Signin again (fail)</li>
+                    <li>Recreate the account</li>
+                    <li>Sign out</li>
+                    <li>Use Forgot Password with bogus email</li>
+                    <li>Use Forgot Password with real email</li>
+                    <li>Follow link in Mailtrap</li>
+                    <li>Set new password</li>
+                    <li>Log in</li>
+                    <li>Log out</li>
+                    <li>Try to create a new profile with existing email address</li>
+                </ol>
+            </li>
+            <li>Commit these changes to git - <b>do this on the host container, not inside vagrant</b><br>
+                <code class="bash">git add .<br>git commit -m "0.0.2 Authentication"<br>git tag 0.0.2<br>git push<br>git push --tags;</code>
             </li>
         </ol>
     </li>
