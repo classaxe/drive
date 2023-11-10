@@ -111,6 +111,7 @@ Basic Setup and User Profile
     [ <a href="#create">Create new Site</a>
     | <a href="#auth">Authentication</a>
     | <a href="#enforce">Email Validation</a>
+    | <a href="#customProfile">Customise Profile Fields</a>
 ]</div>
 <div class="container">
 <ol>
@@ -369,6 +370,63 @@ class RegisterTest extends TestCase
             </li>
         </ol>
     </li>
+
+<hr>
+
+<li id="customProfile">Customise Profile Fields - add <code>mobile</code> number and <code>is_admin</code> to user
+        <ol>
+            <li>Make new migration file to add the two new fields:
+                <ul>
+                    <li><code class="bash">php artisan make:migration add_mobile_to_users</code>
+                    <li>Open the new migration file at <address>database/migrations/YYYY_MM_DD_hhmmss_add_mobile_to_users.php</address>
+                    <li>Add this code to the 'up' method:<br>
+                        <code><div class="added">    $table->integer('is_admin')->default(0)->nullable();<br>    $table->string("mobile")->nullable();</div></code>
+                    </li>
+                    <li>Add this code to the 'down' method:<br>
+                        <code><div class="added">    $table->dropColumn('is_admin');<br>    $table->dropColumn('mobile');</div></code>
+                    </li>
+                    <li>Run the new migration to add the columns:<br>
+                        <code class="bash">artisan migrate</code>
+                    </li>
+                </ul>
+            </li>
+            <li>Edit <address>app/User.php</address> and add <b>'mobile'</b> and <b>'is_admin'</b> to the list of fillable fields:<br>
+                <code>protected $fillable = [<br>    'name', 'email', 'password', <span class="added">'mobile', 'is_admin'</span><br>];</code>
+            </li>
+            <li>Update the <b>Registration Screen</b> to include the 'mobile' field:
+                <ol>
+                    <li>Edit <address>resources/views/auth/register.blade.php</address> to insert this block after the email field:<br>
+                        <code><div class="added">&lt;div class="form-group row mb-5"&gt;<br>    &lt;label for="mobile" class="col-md-4 col-form-label text-md-right"&gt;{{ __('Mobile Number') }}&lt;/label&gt;<br><br>    &lt;div class="col-md-6"&gt;<br>        &lt;input id="mobile" type="tel" class="form-control{{ $errors-&gt;has('email') ? ' is-invalid' : '' }}" name="mobile" value="{{ old('mobile') }}" required&gt;<br><br>        @if ($errors->has('mobile'))<br>            &lt;span class="invalid-feedback" role="alert"&gt;<br>                &lt;strong&gt;{{ $errors->first('mobile') }}&lt;/strong&gt;<br>            &lt;/span&gt;<br>        @endif<br>    &lt;/div&gt;<br>&lt;/div&gt;<br></div></code>
+                    </li>
+                </ol>
+            </li>
+
+            <li>Update the <b>Registration Controller</b> to require and to set the new 'mobile' field:
+                <ol>
+                    <li>Edit <address>app/Http/Controllers/Auth/RegisterController.php</address> to validate the new mobile field:<br>
+                        <code>    protected function validator(array $data)<br>    {<br>        return Validator::make($data, [<br>            'name' => ['required', 'string', 'max:255'],<br>            'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],<br><span class="added">            'mobile' => ['required', 'string', 'min:10', 'max:15'],</span><br>            'password' => ['required', 'string', 'min:6', 'confirmed'],<br>        ]);<br>    }</code><br>
+                        Also set the property on the model:<br>
+                        <code>    protected function create(array $data)<br>    {<br>        return User::create([<br>            'name' => $data['name'],<br>            'email' => $data['email'],<br><span class="added">            'mobile' => $data['mobile'],</span><br>            'password' => Hash::make($data['password']),<br>        ]);<br>    }</code>
+                    </li>
+                </ol>
+            </li>
+            <li>Run unit tests - will <b>FAIL</b> one of five tests:<br>
+                <code class="bash">vendor/bin/phpunit</code><br>
+                <code class="bash">1) Tests\Feature\RegisterTest::register_and_logon<br>Failed asserting that two strings are equal.</code>
+            </li>
+            <li>Make changes to fix broken unit test:<br>
+                Edit <address>tests/Feature/Auth/RegistrationTest.php</address> and add the mobile phone number field to the test payload:<br>
+                <code>    function register_and_logon()<br>    {<br>        $response = $this->post('/register', [<br>            'name' => 'Test2',<br>            'email' => 'test2@example.com',<br><span class="added">            'mobile' => '123 456 7890',</span><br>            'password' => 'password',<br>            'password_confirmation' => 'password',<br>        ]);<br><br>        $this->assertAuthenticated();<br>        $response->assertRedirect(RouteServiceProvider::HOME);<br>    };</code>
+            </li>
+            <li>Run unit tests again (will pass this time):<br>
+            <code class="bash">vendor/bin/phpunit</code>
+            </li>
+            <li>Commit these changes to git - <b>do this on the host container, not inside vagrant</b><br>
+                <code class="bash">git add .<br>git commit -m "0.0.4 Customised Profile Fields"<br>git tag 0.0.4<br>git push<br>git push --tags;</code>
+            </li>
+        </ol>
+    </li>
+
 </ol>
 </div>
 <div class="quicklinks">[ <a href="/">Main Site</a> ]</div>
